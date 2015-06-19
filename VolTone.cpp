@@ -1,4 +1,14 @@
-/* Tone.cpp
+/* VolTone.cpp
+
+  A modification of the Arduino Tone Gererator Library to allow tones of
+  two different volumes to be played by connecting each lead of
+  a speaker to a different pin. For low volume, the second pin will
+  be kept low. For high volume, the two pins will be compliments; one
+  high when the other is low.
+
+  Original file comments follow:
+
+  Tone.cpp
 
   A Tone Generator Library
 
@@ -58,31 +68,49 @@ Version Modified By Date     Comments
 volatile long timer0_toggle_count;
 volatile uint8_t *timer0_pin_port;
 volatile uint8_t timer0_pin_mask;
+volatile uint8_t *timer0_pin2_port;
+volatile uint8_t timer0_pin2_mask;
+volatile boolean timer0_vol_high;
 #endif
 
 volatile long timer1_toggle_count;
 volatile uint8_t *timer1_pin_port;
 volatile uint8_t timer1_pin_mask;
+volatile uint8_t *timer1_pin2_port;
+volatile uint8_t timer1_pin2_mask;
+volatile boolean timer1_vol_high;
 volatile long timer2_toggle_count;
 volatile uint8_t *timer2_pin_port;
 volatile uint8_t timer2_pin_mask;
+volatile uint8_t *timer2_pin2_port;
+volatile uint8_t timer2_pin2_mask;
+volatile boolean timer2_vol_high;
 
 #if defined(TIMSK3)
 volatile long timer3_toggle_count;
 volatile uint8_t *timer3_pin_port;
 volatile uint8_t timer3_pin_mask;
+volatile uint8_t *timer3_pin2_port;
+volatile uint8_t timer3_pin2_mask;
+volatile boolean timer3_vol_high;
 #endif
 
 #if defined(TIMSK4)
 volatile long timer4_toggle_count;
 volatile uint8_t *timer4_pin_port;
 volatile uint8_t timer4_pin_mask;
+volatile uint8_t *timer4_pin2_port;
+volatile uint8_t timer4_pin2_mask;
+volatile boolean timer4_vol_high;
 #endif
 
 #if defined(TIMSK5)
 volatile long timer5_toggle_count;
 volatile uint8_t *timer5_pin_port;
 volatile uint8_t timer5_pin_mask;
+volatile uint8_t *timer5_pin2_port;
+volatile uint8_t timer5_pin2_mask;
+volatile boolean timer5_vol_high;
 #endif
 
 
@@ -123,7 +151,7 @@ static uint8_t tone_pins[AVAILABLE_TONE_PINS] = { 255 /*, 255, 255 */ };
 
 
 
-static int8_t toneBegin(uint8_t _pin)
+static int8_t toneBegin(uint8_t _pin, uint8_t _pin2, boolean vol)
 {
   int8_t _timer = -1;
 
@@ -160,6 +188,9 @@ static int8_t toneBegin(uint8_t _pin)
         bitWrite(TCCR0B, CS00, 1);
         timer0_pin_port = portOutputRegister(digitalPinToPort(_pin));
         timer0_pin_mask = digitalPinToBitMask(_pin);
+        timer0_pin2_port = portOutputRegister(digitalPinToPort(_pin2));
+        timer0_pin2_mask = digitalPinToBitMask(_pin2);
+        timer0_vol_high = vol;
         break;
       #endif
 
@@ -172,6 +203,9 @@ static int8_t toneBegin(uint8_t _pin)
         bitWrite(TCCR1B, CS10, 1);
         timer1_pin_port = portOutputRegister(digitalPinToPort(_pin));
         timer1_pin_mask = digitalPinToBitMask(_pin);
+        timer1_pin2_port = portOutputRegister(digitalPinToPort(_pin2));
+        timer1_pin2_mask = digitalPinToBitMask(_pin2);
+        timer1_vol_high = vol;
         break;
       #endif
 
@@ -184,6 +218,9 @@ static int8_t toneBegin(uint8_t _pin)
         bitWrite(TCCR2B, CS20, 1);
         timer2_pin_port = portOutputRegister(digitalPinToPort(_pin));
         timer2_pin_mask = digitalPinToBitMask(_pin);
+        timer2_pin2_port = portOutputRegister(digitalPinToPort(_pin2));
+        timer2_pin2_mask = digitalPinToBitMask(_pin2);
+        timer2_vol_high = vol;
         break;
       #endif
 
@@ -196,6 +233,9 @@ static int8_t toneBegin(uint8_t _pin)
         bitWrite(TCCR3B, CS30, 1);
         timer3_pin_port = portOutputRegister(digitalPinToPort(_pin));
         timer3_pin_mask = digitalPinToBitMask(_pin);
+        timer3_pin2_port = portOutputRegister(digitalPinToPort(_pin2));
+        timer3_pin2_mask = digitalPinToBitMask(_pin2);
+        timer3_vol_high = vol;
         break;
       #endif
 
@@ -214,6 +254,9 @@ static int8_t toneBegin(uint8_t _pin)
         bitWrite(TCCR4B, CS40, 1);
         timer4_pin_port = portOutputRegister(digitalPinToPort(_pin));
         timer4_pin_mask = digitalPinToBitMask(_pin);
+        timer4_pin2_port = portOutputRegister(digitalPinToPort(_pin2));
+        timer4_pin2_mask = digitalPinToBitMask(_pin2);
+        timer4_vol_high = vol;
         break;
       #endif
 
@@ -226,6 +269,9 @@ static int8_t toneBegin(uint8_t _pin)
         bitWrite(TCCR5B, CS50, 1);
         timer5_pin_port = portOutputRegister(digitalPinToPort(_pin));
         timer5_pin_mask = digitalPinToBitMask(_pin);
+        timer5_pin2_port = portOutputRegister(digitalPinToPort(_pin2));
+        timer5_pin2_mask = digitalPinToBitMask(_pin2);
+        timer5_vol_high = vol;
         break;
       #endif
     }
@@ -238,19 +284,22 @@ static int8_t toneBegin(uint8_t _pin)
 
 // frequency (in hertz) and duration (in milliseconds).
 
-void tone(uint8_t _pin, unsigned int frequency, unsigned long duration)
+void volTone(uint8_t _pin, uint8_t _pin2, boolean vol, unsigned int frequency, unsigned long duration)
 {
   uint8_t prescalarbits = 0b001;
   long toggle_count = 0;
   uint32_t ocr = 0;
   int8_t _timer;
 
-  _timer = toneBegin(_pin);
+  _timer = toneBegin(_pin, _pin2, vol);
 
   if (_timer >= 0)
   {
     // Set the pinMode as OUTPUT
     pinMode(_pin, OUTPUT);
+    digitalWrite(_pin, 1);
+    pinMode(_pin2, OUTPUT);
+    digitalWrite(_pin2, 0);
     
     // if we are using an 8 bit timer, scan through prescalars to find the best fit
     if (_timer == 0 || _timer == 2)
@@ -475,7 +524,7 @@ void disableTimer(uint8_t _timer)
 }
 
 
-void noTone(uint8_t _pin)
+void noVolTone(uint8_t _pin, uint8_t _pin2)
 {
   int8_t _timer = -1;
   
@@ -489,6 +538,7 @@ void noTone(uint8_t _pin)
   disableTimer(_timer);
 
   digitalWrite(_pin, 0);
+  digitalWrite(_pin2, 0);
 }
 
 #ifdef USE_TIMER0
@@ -498,6 +548,8 @@ ISR(TIMER0_COMPA_vect)
   {
     // toggle the pin
     *timer0_pin_port ^= timer0_pin_mask;
+    if (timer0_vol_high)
+      *timer0_pin2_port ^= timer0_pin2_mask;
 
     if (timer0_toggle_count > 0)
       timer0_toggle_count--;
@@ -506,6 +558,7 @@ ISR(TIMER0_COMPA_vect)
   {
     disableTimer(0);
     *timer0_pin_port &= ~(timer0_pin_mask);  // keep pin low after stop
+    *timer0_pin2_port &= ~(timer0_pin2_mask);
   }
 }
 #endif
@@ -518,6 +571,8 @@ ISR(TIMER1_COMPA_vect)
   {
     // toggle the pin
     *timer1_pin_port ^= timer1_pin_mask;
+    if (timer1_vol_high)
+      *timer1_pin2_port ^= timer1_pin2_mask;
 
     if (timer1_toggle_count > 0)
       timer1_toggle_count--;
@@ -526,6 +581,7 @@ ISR(TIMER1_COMPA_vect)
   {
     disableTimer(1);
     *timer1_pin_port &= ~(timer1_pin_mask);  // keep pin low after stop
+    *timer1_pin2_port &= ~(timer1_pin2_mask);
   }
 }
 #endif
@@ -539,16 +595,18 @@ ISR(TIMER2_COMPA_vect)
   {
     // toggle the pin
     *timer2_pin_port ^= timer2_pin_mask;
+    if (timer2_vol_high)
+      *timer2_pin2_port ^= timer2_pin2_mask;
 
     if (timer2_toggle_count > 0)
       timer2_toggle_count--;
   }
   else
   {
-    // need to call noTone() so that the tone_pins[] entry is reset, so the
+    // need to call noVolTone() so that the tone_pins[] entry is reset, so the
     // timer gets initialized next time we call tone().
     // XXX: this assumes timer 2 is always the first one used.
-    noTone(tone_pins[0]);
+    noVolTone(tone_pins[0]);
 //    disableTimer(2);
 //    *timer2_pin_port &= ~(timer2_pin_mask);  // keep pin low after stop
   }
@@ -563,6 +621,8 @@ ISR(TIMER3_COMPA_vect)
   {
     // toggle the pin
     *timer3_pin_port ^= timer3_pin_mask;
+    if (timer3_vol_high)
+      *timer3_pin2_port ^= timer3_pin2_mask;
 
     if (timer3_toggle_count > 0)
       timer3_toggle_count--;
@@ -571,6 +631,7 @@ ISR(TIMER3_COMPA_vect)
   {
     disableTimer(3);
     *timer3_pin_port &= ~(timer3_pin_mask);  // keep pin low after stop
+    *timer3_pin2_port &= ~(timer3_pin2_mask);
   }
 }
 #endif
@@ -583,6 +644,8 @@ ISR(TIMER4_COMPA_vect)
   {
     // toggle the pin
     *timer4_pin_port ^= timer4_pin_mask;
+    if (timer4_vol_high)
+      *timer4_pin2_port ^= timer4_pin2_mask;
 
     if (timer4_toggle_count > 0)
       timer4_toggle_count--;
@@ -591,6 +654,7 @@ ISR(TIMER4_COMPA_vect)
   {
     disableTimer(4);
     *timer4_pin_port &= ~(timer4_pin_mask);  // keep pin low after stop
+    *timer4_pin2_port &= ~(timer4_pin2_mask);
   }
 }
 #endif
@@ -603,6 +667,8 @@ ISR(TIMER5_COMPA_vect)
   {
     // toggle the pin
     *timer5_pin_port ^= timer5_pin_mask;
+    if (timer5_vol_high)
+      *timer5_pin2_port ^= timer5_pin2_mask;
 
     if (timer5_toggle_count > 0)
       timer5_toggle_count--;
@@ -611,6 +677,7 @@ ISR(TIMER5_COMPA_vect)
   {
     disableTimer(5);
     *timer5_pin_port &= ~(timer5_pin_mask);  // keep pin low after stop
+    *timer5_pin2_port &= ~(timer5_pin2_mask);
   }
 }
 #endif
